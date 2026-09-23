@@ -1,0 +1,7 @@
+# Laufzeitdaten und Geheimnisse gehören nicht ins Repo
+server/data/
+*.env
+.env*
+node_modules/
+.DS_Store
+Thumbs.db

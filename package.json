@@ -1,0 +1,11 @@
+{
+  "name": "passt-it-zu-mir",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Messe-Quiz: Passt Systemintegration oder Anwendungsentwicklung zu dir?",
+  "scripts": {
+    "start": "node server/server.js",
+    "check": "node --check server/server.js"
+  },
+  "engines": { "node": ">=18" }
+}
