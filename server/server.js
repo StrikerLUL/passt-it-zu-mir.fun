@@ -4,7 +4,7 @@
 //
 //  GET  /                → Handy-Fragebogen (public/index.html)
 //  GET  /api/stats       → Zähler heute + gesamt
-//  POST /api/result      → { mode: 'si'|'ae'|'tie'|'none'|'unclear', source: 'phone'|'kiosk', cid }
+//  POST /api/result      → { mode: 'si'|'ae'|'tie'|'none'|'unclear', pk, source: 'phone'|'kiosk', cid }
 //  GET  /api/config      → { threshold, otherJobs }
 //  POST /api/config      → { threshold?, otherJobs? } (Header X-Admin-Key)
 //  POST /api/reset       → { scope: 'today'|'all' } (Header X-Admin-Key)
@@ -32,6 +32,9 @@ const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
 const KIOSK_REL = 'kiosk/messe-bildschirm.html';
 const DATA_FILE = path.join(DATA_DIR, 'stats.json');
 const MODES = ['si', 'ae', 'tie', 'none', 'unclear'];
+// Profil-Schlüssel für den Live-Feed, z. B. "ae.stark.1" – nur dieses Format wird angenommen (kein freier Text)
+const PK_RE = /^(?:(?:si|ae|tie)\.(?:knapp|gut|stark)|none|unclear)\.[0-9]$/;
+const recent = [];   // nur im Arbeitsspeicher, keine personenbezogenen Daten
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 let db = { days: {}, config: { threshold: 40, otherJobs: '' }, lastDeploy: null };
@@ -61,7 +64,7 @@ function summary(day) {
 function stats() {
   const all = emptyDay();
   for (const d of Object.values(db.days)) for (const k in all) all[k] += d[k] || 0;
-  return { date: today(), today: summary(db.days[today()]), all: summary(all), threshold: db.config.threshold };
+  return { date: today(), today: summary(db.days[today()]), all: summary(all), threshold: db.config.threshold, recent: recent.slice(-10) };
 }
 
 // Bremse gegen Spam: pro Handy (zufällige Geräte-ID) max. 1 Ergebnis alle 20 s,
@@ -178,6 +181,9 @@ const server = http.createServer(async (req, res) => {
       const d = db.days[key] || (db.days[key] = emptyDay());
       d[body.mode] = (d[body.mode] || 0) + 1;
       d[admin && body.source === 'kiosk' ? 'kiosk' : 'phone']++;
+      if (typeof body.pk === 'string' && PK_RE.test(body.pk) && body.pk.split('.')[0] === body.mode) {
+        recent.push({ pk: body.pk, t: Date.now() }); if (recent.length > 20) recent.shift();
+      }
       save();
       return send(res, 200, stats());
     }

@@ -407,6 +407,9 @@
   body.not-attract .lang-switch { opacity: 0; pointer-events: none; }
   @media (max-width: 700px) { .live { margin-top: 30px; } }
 
+  .start-btn { transition: box-shadow .35s ease; }
+  .start-btn.hit { box-shadow: 0 0 0 4px rgba(255,255,255,.5), 0 0 60px rgba(176,140,255,.7) !important; }
+
   #confetti { position: fixed; inset: 0; z-index: 4; pointer-events: none; }
 
   .fs-btn { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 14px); right: 14px; z-index: 5; opacity: .25; transition: opacity .2s; }
@@ -561,11 +564,9 @@ const I18N = {
     liveTeam: (pctHtml, name) => ` – ${pctHtml} Team ${name}`, liveTie: ' – Gleichstand',
     shareFit: p => `Mein Ergebnis: ${p}! Welche IT-Ausbildung passt zu dir?`,
     shareNone: 'Welche IT-Ausbildung passt zu dir? Mach den Test!',
-    secondHead: 'Unsicher? Sprich uns trotzdem an!',
-    secondLines: ['Viele merken erst im Praktikum, dass ihnen IT doch Spaß macht.',
-                  'Acht Fragen sind nur ein erster Eindruck – ein Gespräch sagt viel mehr.',
-                  'Vielleicht unterschätzt du dich einfach – finde es bei einem Schnuppertag heraus!'],
+    secondHead: 'Unsicher? Sprich uns trotzdem gerne an!',
     otherJobs: list => `Bei uns gibt es außerdem: ${list}`,
+    justNow: 'Gerade eben:',
     ticker: [['all', 'Jede Runde anders', 'Die Fragen werden jedes Mal neu gemischt'],
              ['all', '3 Jahre', 'Ausbildung — abwechselnd im Betrieb und in der Berufsschule'],
              ['si', 'Systemintegration', 'Computer, Server und WLAN einrichten, Probleme lösen, Kolleg:innen helfen'],
@@ -604,7 +605,7 @@ const I18N = {
       ae: ['Du tüftelst gerne und willst selbst etwas erschaffen. Genau darum geht es: Apps, Webseiten und Programme bauen.',
            'Du denkst logisch und gibst nicht auf, bis die Lösung steht. In der Anwendungsentwicklung baust du damit Programme, die andere täglich benutzen.',
            'Aus einer Idee etwas Echtes bauen – das reizt dich. Anwendungsentwickler:innen erschaffen genau das: Apps, Webseiten und Software.'],
-      tie: ['Dich reizt Technik einrichten genauso wie Programme bauen – du hast die Wahl. Ein Schnuppertag in beiden Bereichen hilft dir bei der Entscheidung.',
+      tie: ['Dich reizt Technik einrichten genauso wie Programme bauen – du hast die Wahl. Sprich uns an, wir zeigen dir beide Bereiche!',
             'Du bist vielseitig: Hardware und Software sprechen dich beide an. Schau dir am besten beide Bereiche einmal von innen an.'],
     },
     outros: ['Frag uns am Stand, wie ein Arbeitstag bei uns aussieht!', 'Frag uns, woran unsere Azubis gerade arbeiten!', 'Sprich uns an – wir zeigen dir, wie die Ausbildung abläuft!'],
@@ -647,11 +648,9 @@ const I18N = {
     liveTeam: (pctHtml, name) => ` – ${pctHtml} Team ${name}`, liveTie: ' – it\u2019s a tie',
     shareFit: p => `My result: ${p}! Which IT apprenticeship suits you?`,
     shareNone: 'Which IT apprenticeship suits you? Take the test!',
-    secondHead: 'Not sure? Come and talk to us anyway!',
-    secondLines: ['Many people only discover during an internship that they enjoy IT after all.',
-                  'Eight questions are just a first impression – a conversation tells you much more.',
-                  'Maybe you\u2019re just underestimating yourself – find out on a taster day!'],
+    secondHead: 'Not sure? Feel free to talk to us anyway!',
     otherJobs: list => `We also offer: ${list}`,
+    justNow: 'Just now:',
     ticker: [['all', 'New every round', 'The questions are reshuffled every time'],
              ['all', '3 years', 'Apprenticeship — alternating between company and vocational school'],
              ['si', 'System Integration', 'Set up computers, servers and Wi-Fi, solve problems, help colleagues'],
@@ -690,7 +689,7 @@ const I18N = {
       ae: ['You love tinkering and want to create something yourself. That\u2019s exactly what it\u2019s about: building apps, websites and programs.',
            'You think logically and don\u2019t give up until the solution works. In application development you use that to build programs others use every day.',
            'Turning an idea into something real – that\u2019s what excites you. Application developers create exactly that: apps, websites and software.'],
-      tie: ['Setting up technology appeals to you as much as building programs – you have the choice. A taster day in both areas will help you decide.',
+      tie: ['Setting up technology appeals to you as much as building programs – you have the choice. Talk to us and we\u2019ll show you both areas!',
             'You\u2019re versatile: hardware and software both appeal to you. Best take a look at both areas from the inside.'],
     },
     outros: ['Ask us at the stand what a working day looks like here!', 'Ask us what our apprentices are working on right now!', 'Talk to us – we\u2019ll show you how the apprenticeship works!'],
@@ -705,6 +704,11 @@ const I18N = {
   },
 };
 const T = () => I18N[LANG];
+function profileName(pk) {
+  const [m, a, b] = String(pk || '').split('.'), P = T().profiles[m];
+  if (!P) return '';
+  return Array.isArray(P) ? P[+a] || '' : (P[a] || [])[+b] || '';
+}
 
 /* ======================== FRAGEN-POOL ======================== */
 // Pro Runde: je Richtung 3 normale + 1 umgekehrte Frage (rev: Zustimmung zählt negativ)
@@ -867,6 +871,67 @@ function makeNode(i) {
     phase: Math.random() * Math.PI * 2,
   };
 }
+
+/* ======================== DATENPAKETE & KOMETEN ======================== */
+// Pakete wandern über die Netz-Linien, Kometen fliegen in den QR-Code (Laptop) bzw. den Start-Button (Handy)
+let packets = [], comets = [], cometClock = 0;
+const cometTarget = () => document.querySelector('.qr-frame') || document.getElementById('startBtn');
+function spawnComet() {
+  const el = cometTarget(); if (!el || !nodes.length) return;
+  const r = el.getBoundingClientRect(); if (!r.width) return;
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  let n = null;
+  for (let k = 0; k < 8; k++) { const c = nodes[Math.floor(Math.random() * nodes.length)]; if (Math.hypot(c.x - cx, c.y - cy) > Math.min(W, H) * 0.35) { n = c; break; } }
+  if (!n) return;
+  const dx = cx - n.x, dy = cy - n.y, d = Math.hypot(dx, dy);
+  const stop = Math.max(r.width, r.height) * 0.62;           // endet am Rand – nie über dem Code
+  const ex = cx - dx / d * stop, ey = cy - dy / d * stop;
+  const bend = (Math.random() < .5 ? -1 : 1) * d * (0.18 + Math.random() * 0.2);
+  comets.push({ x0: n.x, y0: n.y, ex, ey, mx: (n.x + ex) / 2 - dy / d * bend, my: (n.y + ey) / 2 + dx / d * bend,
+                t: 0, v: 0.011 + Math.random() * 0.006, col: n.cat, trail: [] });
+}
+function drawFx(C_SI, C_AE, maxD) {
+  if (reduceMotion || LITE >= 2) { packets.length = 0; comets.length = 0; return; }
+  const maxP = LITE ? 6 : 16;
+  // neue Pakete entlang kurzer Verbindungen
+  if (packets.length < maxP && Math.random() < 0.35) {
+    const a = nodes[Math.floor(Math.random() * nodes.length)];
+    let best = null, bd = 1e9;
+    for (const b of nodes) { if (b === a) continue; const d = Math.hypot(a.x - b.x, a.y - b.y); if (d < maxD && d < bd && Math.random() < .7) { bd = d; best = b; } }
+    if (best) packets.push({ a, b: best, p: 0, v: 0.02 + Math.random() * 0.025, col: a.cat === best.cat ? a.cat : (Math.random() < .5 ? 'si' : 'ae') });
+  }
+  for (const k of packets) {
+    k.p += k.v;
+    const x = k.a.x + (k.b.x - k.a.x) * k.p, y = k.a.y + (k.b.y - k.a.y) * k.p;
+    const col = k.col === 'si' ? C_SI : C_AE;
+    const px = k.a.x + (k.b.x - k.a.x) * Math.max(0, k.p - 0.18), py = k.a.y + (k.b.y - k.a.y) * Math.max(0, k.p - 0.18);
+    const g = nctx.createLinearGradient(px, py, x, y); g.addColorStop(0, `rgba(${col},0)`); g.addColorStop(1, `rgba(${col},.95)`);
+    nctx.strokeStyle = g; nctx.lineWidth = 2.2; nctx.beginPath(); nctx.moveTo(px, py); nctx.lineTo(x, y); nctx.stroke();
+    nctx.fillStyle = `rgba(255,255,255,.95)`; nctx.beginPath(); nctx.arc(x, y, 1.8, 0, Math.PI * 2); nctx.fill();
+    if (k.p >= 1) k.b.flash = 1;
+  }
+  packets = packets.filter(k => k.p < 1);
+  // Kometen nur auf dem Startbildschirm
+  if (typeof current === 'undefined' || current === 'attract') {
+    if (++cometClock > (LITE ? 150 : 80) && comets.length < 3) { cometClock = 0; spawnComet(); }
+  } else comets.length = 0;
+  for (const c of comets) {
+    c.t = Math.min(1, c.t + c.v);
+    const u = 1 - c.t, x = u * u * c.x0 + 2 * u * c.t * c.mx + c.t * c.t * c.ex, y = u * u * c.y0 + 2 * u * c.t * c.my + c.t * c.t * c.ey;
+    c.trail.push([x, y]); if (c.trail.length > 22) c.trail.shift();
+    const col = c.col === 'si' ? C_SI : C_AE;
+    for (let i = 1; i < c.trail.length; i++) {
+      const f = i / c.trail.length;
+      nctx.strokeStyle = `rgba(${col},${f * 0.8})`; nctx.lineWidth = f * 3.2;
+      nctx.beginPath(); nctx.moveTo(c.trail[i - 1][0], c.trail[i - 1][1]); nctx.lineTo(c.trail[i][0], c.trail[i][1]); nctx.stroke();
+    }
+    const g = nctx.createRadialGradient(x, y, 0, x, y, 12); g.addColorStop(0, 'rgba(255,255,255,.95)'); g.addColorStop(.35, `rgba(${col},.8)`); g.addColorStop(1, `rgba(${col},0)`);
+    nctx.fillStyle = g; nctx.beginPath(); nctx.arc(x, y, 12, 0, Math.PI * 2); nctx.fill();
+    if (c.t >= 1 && !c.hit) { c.hit = true; const el = cometTarget(); if (el) { el.classList.remove('hit'); void el.offsetWidth; el.classList.add('hit'); } }
+  }
+  comets = comets.filter(c => !c.hit);
+}
+
 function drawNet(t) {
   if (!document.hidden) {
     if (!fpsT0) fpsT0 = t;
@@ -918,8 +983,13 @@ function drawNet(t) {
       }
     }
   }
+  drawFx(C_SI, C_AE, maxD);
   for (const n of nodes) {
     const col = n.cat === 'si' ? C_SI : C_AE;
+    if (n.flash) {
+      nctx.fillStyle = `rgba(${col},${n.flash * 0.35})`; nctx.beginPath(); nctx.arc(n.x, n.y, 4 + n.flash * 10, 0, Math.PI * 2); nctx.fill();
+      n.flash = n.flash > 0.05 ? n.flash * 0.9 : 0;
+    }
     const tw = 0.6 + 0.4 * Math.sin(t / 900 + n.phase);
     const boost = n.cat === 'si' ? pulse.si : pulse.ae;
     nctx.fillStyle = `rgba(${col},${0.55 * tw + boost * 0.4})`;
@@ -1111,12 +1181,15 @@ function computeResult() {
     top = qTextOf(pickOne(cand.length ? cand : plain.filter(x => x.v === target)).q);
   }
 
-  const profile = (mode === 'none' || mode === 'unclear') ? pickOne(L.profiles[mode]) : pickOne(L.profiles[mode][tier]);
+  const plist = (mode === 'none' || mode === 'unclear') ? L.profiles[mode] : L.profiles[mode][tier];
+  const pIdx = Math.floor(Math.random() * plist.length);
+  const profile = plist[pIdx];
+  const pk = (mode === 'none' || mode === 'unclear') ? `${mode}.${pIdx}` : `${mode}.${tier}.${pIdx}`;
   const title = pickOne(L.titles[mode]);
   const text = mode === 'none' ? pickOne(L.noneBodies)(allPct, FIT_THRESHOLD)
     : mode === 'unclear' ? pickOne(L.unclearBodies)
     : `${pickOne(L.intros[tier])} ${pickOne(L.bodies[mode])} ${pickOne(L.outros)}`;
-  return { siPct, aePct, allPct, mode, tier, fit, reached: allPct >= FIT_THRESHOLD, top, profile, title, text };
+  return { siPct, aePct, allPct, mode, tier, fit, reached: allPct >= FIT_THRESHOLD, top, profile, pk, title, text };
 }
 
 /* ======================== RESULT ======================== */
@@ -1191,7 +1264,7 @@ function revealResult(r) {
   const second = document.getElementById('second');
   second.hidden = mode !== 'none';
   if (mode === 'none') {
-    second.innerHTML = `<b>${L.secondHead}</b><span>${pickOne(L.secondLines)}</span>`;
+    second.innerHTML = `<b>${L.secondHead}</b>`;
     if (OTHER_JOBS) { const j = document.createElement('span'); j.className = 'jobs'; j.textContent = L.otherJobs(OTHER_JOBS); second.appendChild(j); }
   }
 
@@ -1244,7 +1317,7 @@ function revealResult(r) {
     setTimeout(() => { vTitle.classList.add('glitch'); ringBox.classList.add('shake'); }, 1750);
     setTimeout(() => ringBox.classList.remove('shake'), 2300);
   }
-  recordResult(mode);
+  recordResult(mode, r.pk);
   startResultCountdown();
 }
 document.getElementById('againBtn').addEventListener('click', () => show('attract'));
@@ -1328,8 +1401,8 @@ refreshStats();
 setInterval(() => { if (current === 'attract' && !document.hidden) refreshStats(); }, 20000);
 
 let lastResult = null;
-function recordResult(mode) {
-  getJSON('api/result', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode, source: 'phone', cid: clientId }) })
+function recordResult(mode, pk) {
+  getJSON('api/result', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode, pk, source: 'phone', cid: clientId }) })
     .then(st => { if (st) renderLive(st); });
 }
 // Profil für "Teilen" merken
